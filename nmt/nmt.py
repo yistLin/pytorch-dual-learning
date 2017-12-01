@@ -695,6 +695,7 @@ def decode(model, data, verbose=True):
     hypotheses = []
     begin_time = time.time()
 
+    data = list(data)
     if type(data[0]) is tuple:
         for src_sent, tgt_sent in data:
             hyps = model.translate(src_sent)
@@ -807,14 +808,13 @@ def test(args):
     if args.cuda:
         model = model.cuda()
 
-    hypotheses = decode(model, test_data)
+    hypotheses = decode(model, test_data, verbose=False)
     top_hypotheses = [hyps[0] for hyps in hypotheses]
 
-    bleu_score = get_bleu([tgt for src, tgt in test_data], top_hypotheses)
-    word_acc = get_acc([tgt for src, tgt in test_data], top_hypotheses, 'word_acc')
-    sent_acc = get_acc([tgt for src, tgt in test_data], top_hypotheses, 'sent_acc')
-    print('Corpus Level BLEU: %f, word level acc: %f, sentence level acc: %f' % (bleu_score, word_acc, sent_acc),
-          file=sys.stderr)
+    # bleu_score = get_bleu([tgt for src, tgt in test_data], top_hypotheses)
+    # word_acc = get_acc([tgt for src, tgt in test_data], top_hypotheses, 'word_acc')
+    # sent_acc = get_acc([tgt for src, tgt in test_data], top_hypotheses, 'sent_acc')
+    # print('Corpus Level BLEU: %f, word level acc: %f, sentence level acc: %f' % (bleu_score, word_acc, sent_acc), file=sys.stderr)
 
     if args.save_to_file:
         print('save decoding results to %s' % args.save_to_file, file=sys.stderr)
