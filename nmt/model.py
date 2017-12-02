@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import sys
 
 import torch
 import torch.nn as nn
@@ -335,6 +336,135 @@ class NMT(nn.Module):
                 completed_samples[i] = word2id(src_sent_samples, self.vocab.tgt.id2word)
 
         return completed_samples
+
+    def beam(self, src_sents, beam_size=3):
+        """
+        perform beam search
+        """
+        if not type(src_sents[0]) == list:
+            src_sents = [src_sents]
+
+        src_sents_var = to_input_variable(src_sents, self.vocab.src, cuda=self.args.cuda, is_test=True)
+
+        src_encoding, dec_init_vec = self.encode(src_sents_var, [len(src_sents[0])])
+        src_encoding_att_linear = tensor_transform(self.att_src_linear, src_encoding)
+
+        init_state = dec_init_vec[0]
+        init_cell = dec_init_vec[1]
+        hidden = (init_state, init_cell)
+
+        att_tm1 = Variable(torch.zeros(1, self.args.hidden_size), volatile=True)
+        hyp_scores = Variable(torch.zeros(1), volatile=True)
+        if self.args.cuda:
+            att_tm1 = att_tm1.cuda()
+            hyp_scores = hyp_scores.cuda()
+
+        eos_id = self.vocab.tgt['</s>']
+        bos_id = self.vocab.tgt['<s>']
+        tgt_vocab_size = len(self.vocab.tgt)
+
+        # store output distributions
+        out_dists = [[]]
+        completed_out_dists = []
+
+        hypotheses = [[bos_id]]
+        completed_hypotheses = []
+        completed_hypothesis_scores = []
+
+        t = 0
+        while len(completed_hypotheses) < beam_size and t < self.args.decode_max_time_step:
+            t += 1
+            hyp_num = len(hypotheses)
+
+            expanded_src_encoding = src_encoding.expand(src_encoding.size(0), hyp_num, src_encoding.size(2))
+            expanded_src_encoding_att_linear = src_encoding_att_linear.expand(src_encoding_att_linear.size(0), hyp_num, src_encoding_att_linear.size(2))
+
+            y_tm1 = Variable(torch.LongTensor([hyp[-1] for hyp in hypotheses]), volatile=True)
+            if self.args.cuda:
+                y_tm1 = y_tm1.cuda()
+
+            y_tm1_embed = self.tgt_embed(y_tm1)
+
+            x = torch.cat([y_tm1_embed, att_tm1], 1)
+
+            # h_t: (hyp_num, hidden_size)
+            h_t, cell_t = self.decoder_lstm(x, hidden)
+            h_t = self.dropout(h_t)
+
+            ctx_t, alpha_t = self.dot_prod_attention(h_t, expanded_src_encoding.permute(1, 0, 2), expanded_src_encoding_att_linear.permute(1, 0, 2))
+
+            att_t = F.tanh(self.att_vec_linear(torch.cat([h_t, ctx_t], 1)))
+            att_t = self.dropout(att_t)
+
+            score_t = self.readout(att_t)
+            p_t = F.log_softmax(score_t)
+
+            live_hyp_num = beam_size - len(completed_hypotheses)
+            new_hyp_scores = (hyp_scores.unsqueeze(1).expand_as(p_t) + p_t).view(-1)
+            top_new_hyp_scores, top_new_hyp_pos = torch.topk(new_hyp_scores, k=live_hyp_num)
+            prev_hyp_ids = top_new_hyp_pos / tgt_vocab_size
+            word_ids = top_new_hyp_pos % tgt_vocab_size
+            # new_hyp_scores = new_hyp_scores[top_new_hyp_pos.data]
+
+            # debugging
+            # print('  [DEBUG] p_t.data =', p_t.data, file=sys.stderr)
+            # get output distributions
+            dist_t = p_t.cpu().data
+            p_t_cpu = p_t.cpu()
+
+            new_out_dists = []
+            new_hypotheses = []
+
+            live_hyp_ids = []
+            new_hyp_scores = []
+            for prev_hyp_id, word_id, new_hyp_score in zip(prev_hyp_ids.cpu().data, word_ids.cpu().data, top_new_hyp_scores.cpu().data):
+                tgt_dists = out_dists[prev_hyp_id] + [p_t_cpu[prev_hyp_id].unsqueeze(0)]
+                hyp_tgt_words = hypotheses[prev_hyp_id] + [word_id]
+                if word_id == eos_id:
+                    completed_out_dists.append(tgt_dists)
+                    completed_hypotheses.append(hyp_tgt_words)
+                    completed_hypothesis_scores.append(new_hyp_score)
+                else:
+                    new_out_dists.append(tgt_dists)
+                    new_hypotheses.append(hyp_tgt_words)
+                    live_hyp_ids.append(prev_hyp_id)
+                    new_hyp_scores.append(new_hyp_score)
+
+            if len(completed_hypotheses) == beam_size:
+                break
+
+            live_hyp_ids = torch.LongTensor(live_hyp_ids)
+            if self.args.cuda:
+                live_hyp_ids = live_hyp_ids.cuda()
+
+            hidden = (h_t[live_hyp_ids], cell_t[live_hyp_ids])
+            att_tm1 = att_t[live_hyp_ids]
+
+            hyp_scores = Variable(torch.FloatTensor(new_hyp_scores), volatile=True) # new_hyp_scores[live_hyp_ids]
+            if self.args.cuda:
+                hyp_scores = hyp_scores.cuda()
+
+            out_dists = new_out_dists
+            hypotheses = new_hypotheses
+
+        if len(completed_hypotheses) == 0:
+            completed_out_dists = [out_dists[0]]
+            completed_hypotheses = [hypotheses[0]]
+            completed_hypothesis_scores = [0.0]
+
+        # convert to words
+        completed_hypotheses_words = []
+        for i, hyp in enumerate(completed_hypotheses):
+            completed_hypotheses_words.append([self.vocab.tgt.id2word[w] for w in hyp])
+
+        # merge variables
+        for i, dists in enumerate(completed_out_dists):
+            completed_out_dists[i] = torch.cat(dists, 0)
+
+        # sort with scores
+        ranked_hypotheses = sorted(zip(completed_hypotheses, completed_hypothesis_scores, completed_hypotheses_words, completed_out_dists), key=lambda x: x[1], reverse=True)
+
+        return [(hyp, words, dist) for hyp, score, words, dist in ranked_hypotheses]
 
     def attention(self, h_t, src_encoding, src_linear_for_att):
         # (1, batch_size, attention_size) + (src_sent_len, batch_size, attention_size) =>

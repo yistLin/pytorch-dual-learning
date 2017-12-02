@@ -44,6 +44,42 @@ def sample(args):
             print('*' * 80)
 
 
+def beam(args):
+    # load model params
+    print('load model from [%s]' % args.model_bin, file=sys.stderr)
+    params = torch.load(args.model_bin, map_location=lambda storage, loc: storage)
+    vocab = params['vocab']
+    opt = params['args']
+    state_dict = params['state_dict']
+
+    # build model
+    model = NMT(opt, vocab)
+    model.load_state_dict(state_dict)
+    model.eval()
+    model = model.cuda()
+
+    # loss function
+    loss_fn = torch.nn.NLLLoss()
+
+    # sampling
+    print('begin beam searching')
+    src_sent = ['we', 'have', 'told', 'that', '.']
+    hyps = model.beam(src_sent)
+
+    print('src_sent:', ' '.join(src_sent))
+    for ids, hyp, dist in hyps:
+        print('tgt_sent:', ' '.join(hyp))
+        print('tgt_ids :', end=' ')
+        for id in ids:
+            print(id, end=', ')
+        print()
+        print('out_dist:', dist)
+
+        var_ids = torch.autograd.Variable(torch.LongTensor(ids[1:]), requires_grad=False)
+        loss = loss_fn(dist, var_ids)
+        print('NLL loss =', loss)
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('model_bin')
@@ -51,5 +87,6 @@ if __name__ == '__main__':
     parser.add_argument('tgt_file')
     args = parser.parse_args()
 
-    sample(args)
+    # sample(args)
+    beam(args)
 
