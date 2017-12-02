@@ -508,15 +508,24 @@ def evaluate_loss(model, data, crit):
 
 
 def init_training(args):
-    vocab = torch.load(args.vocab)
+    if args.load_model:
+        print('load model from [%s]' % args.load_model, file=sys.stderr)
+        params = torch.load(args.load_model, map_location=lambda storage, loc: storage)
+        vocab = params['vocab']
+        opt = params['args']
+        state_dict = params['state_dict']
+        model = NMT(opt, vocab)
+        model.load_state_dict(state_dict)
+        model.train()
+    else:
+        vocab = torch.load(args.vocab)
+        model = NMT(args, vocab)
+        model.train()
 
-    model = NMT(args, vocab)
-    model.train()
-
-    if args.uniform_init:
-        print('uniformly initialize parameters [-%f, +%f]' % (args.uniform_init, args.uniform_init), file=sys.stderr)
-        for p in model.parameters():
-            p.data.uniform_(-args.uniform_init, args.uniform_init)
+        if args.uniform_init:
+            print('uniformly initialize parameters [-%f, +%f]' % (args.uniform_init, args.uniform_init), file=sys.stderr)
+            for p in model.parameters():
+                p.data.uniform_(-args.uniform_init, args.uniform_init)
 
     vocab_mask = torch.ones(len(vocab.tgt))
     vocab_mask[vocab.tgt['<pad>']] = 0
@@ -547,6 +556,14 @@ def train(args):
 
     train_iter = patience = cum_loss = report_loss = cum_tgt_words = report_tgt_words = 0
     cum_examples = cum_batches = report_examples = epoch = valid_num = best_model_iter = 0
+
+    if args.load_model:
+        import re
+        train_iter = int(re.search('(?<=iter)\d+', args.load_model).group(0))
+        print('start from train_iter = %d' % train_iter)
+
+        valid_num = train_iter // args.valid_niter
+
     hist_valid_scores = []
     train_time = begin_time = time.time()
     print('begin Maximum Likelihood training')
