@@ -2,9 +2,9 @@ from __future__ import print_function
 
 import os
 import sys
-import copy
 import time
 import argparse
+from itertools import tee
 
 import numpy as np
 
@@ -487,7 +487,8 @@ def evaluate_loss(model, data, crit):
     model.eval()
     cum_loss = 0.
     cum_tgt_words = 0.
-    for src_sents, tgt_sents in data_iter(copy.deepcopy(data), batch_size=args.batch_size, shuffle=False):
+
+    for src_sents, tgt_sents in data_iter(data, batch_size=args.batch_size, shuffle=False):
         pred_tgt_word_num = sum(len(s[1:]) for s in tgt_sents) # omitting leading `<s>`
         src_sents_len = [len(s) for s in src_sents]
 
@@ -539,8 +540,8 @@ def train(args):
     dev_data_src = read_corpus(args.dev_src, source='src')
     dev_data_tgt = read_corpus(args.dev_tgt, source='tgt')
 
-    train_data = zip(train_data_src, train_data_tgt)
-    dev_data = zip(dev_data_src, dev_data_tgt)
+    train_data = list(zip(train_data_src, train_data_tgt))
+    dev_data = list(zip(dev_data_src, dev_data_tgt))
 
     vocab, model, optimizer, nll_loss, cross_entropy_loss = init_training(args)
 
@@ -552,7 +553,9 @@ def train(args):
 
     while True:
         epoch += 1
-        for src_sents, tgt_sents in data_iter(copy.deepcopy(train_data), batch_size=args.batch_size):
+        print('start of epoch {:d}'.format(epoch))
+
+        for src_sents, tgt_sents in data_iter(train_data, batch_size=args.batch_size):
             train_iter += 1
 
             src_sents_var = to_input_variable(src_sents, vocab.src, cuda=args.cuda)

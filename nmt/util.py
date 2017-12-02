@@ -14,6 +14,7 @@ def read_corpus(file_path, source):
 
 
 def batch_slice(data, batch_size, sort=True):
+    batched_data = []
     batch_num = int(np.ceil(len(data) / float(batch_size)))
     for i in range(batch_num):
         cur_batch_size = batch_size if i < batch_num - 1 else len(data) - batch_size * i
@@ -25,7 +26,9 @@ def batch_slice(data, batch_size, sort=True):
             src_sents = [src_sents[src_id] for src_id in src_ids]
             tgt_sents = [tgt_sents[src_id] for src_id in src_ids]
 
-        yield src_sents, tgt_sents
+        batched_data.append((src_sents, tgt_sents))
+
+    return batched_data
 
 
 def data_iter(data, batch_size, shuffle=True):
@@ -43,9 +46,11 @@ def data_iter(data, batch_size, shuffle=True):
     for src_len in buckets:
         tuples = buckets[src_len]
         if shuffle: np.random.shuffle(tuples)
-        batched_data.extend(list(batch_slice(tuples, batch_size)))
+        batched_data.extend(batch_slice(tuples, batch_size))
 
     if shuffle:
         np.random.shuffle(batched_data)
+
     for batch in batched_data:
         yield batch
+
