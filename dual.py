@@ -62,8 +62,6 @@ def dual(args):
 
     epoch = 0
     while True:
-        if epoch == 2:
-            break
         epoch += 1
         print('start of epoch {:d}'.format(epoch))
 
@@ -71,8 +69,15 @@ def dual(args):
         data['A'] = iter(train_srcs['A'])
         data['B'] = iter(train_srcs['B'])
 
-        for t in range(0, len(train_srcs['A'])):
-            print('sent', t)
+        start = (epoch - 1) * len(train_srcs['A']) + 1
+        for t in range(start, start + len(train_srcs['A'])):
+            show_log = False
+            if t % args.log_every == 0:
+                show_log = True
+            
+            if show_log:
+                print('step', t)
+
             for m in ['A', 'B']:
                 lm_probs = []
 
@@ -87,9 +92,15 @@ def dual(args):
                 vocabB = vocabs[change(m)]
                 s = next(data[m])
 
+                if show_log:
+                    print('[s]', ' '.join(s))
+
                 hyps = modelA.beam(s, beam_size=5)
 
                 for ids, smid, dist in hyps:
+                    if show_log:
+                        print('[smid]', ' '.join(smid))
+
                     var_ids = torch.autograd.Variable(torch.LongTensor(ids[1:]), requires_grad=False)
                     NLL_losses.append(loss_nll(dist, var_ids).cpu())
 
@@ -109,16 +120,33 @@ def dual(args):
                 r2_mean = sum(CE_losses) / len(CE_losses)
                 r2 = [Variable(-(l.data - r2_mean.data), requires_grad=False) for l in CE_losses]
 
-                rk = [a + b for a, b in zip(r1, r2)]
+                if show_log:
+                    for a, b, in zip(r1, r2):
+                        print('r1 = {:.4f} \t r2 = {:.4f}'.format(a.data.numpy().item(), b.data.numpy().item()))
+
+                alpha = Variable(torch.FloatTensor([args.alpha]), requires_grad=False)
+                beta = Variable(torch.FloatTensor([1 - args.alpha]), requires_grad=False)
+                rk = [a * alpha + b * beta for a, b in zip(r1, r2)]
 
                 optimizerA.zero_grad()
                 optimizerB.zero_grad()
 
-                torch.mean(torch.cat(NLL_losses) * torch.cat(rk)).backward()
-                torch.mean(torch.cat(CE_losses)).backward()
+                A_loss = torch.mean(torch.cat(NLL_losses) * torch.cat(rk))
+                B_loss = torch.mean(torch.cat(CE_losses)) * beta
+                
+                A_loss.backward()
+                B_loss.backward()
 
                 optimizerA.step()
                 optimizerB.step()
+
+                if show_log:
+                    print('A loss = {:.7f} \t B loss = {:.7f}'.format(A_loss.data.numpy().item(), B_loss.data.numpy().item()))
+                    print()
+            
+            if t % args.save_n_iter == 0:
+                models['A'].save('{}.iter{}.bin'.format(args.modelA_path, t))
+                models['B'].save('{}.iter{}.bin'.format(args.modelB_path, t))
 
 
 def change(m):
@@ -137,6 +165,11 @@ if __name__ == '__main__':
     parser.add_argument('lmBdict')
     parser.add_argument('train_srcA')
     parser.add_argument('train_srcB')
+    parser.add_argument('--modelA_path', type=str, default='modelA')
+    parser.add_argument('--modelB_path', type=str, default='modelB')
+    parser.add_argument('--log_every', type=int, default=10)
+    parser.add_argument('--save_n_iter', type=int, default=1000)
+    parser.add_argument('--alpha', type=float, default=0.5)
     args = parser.parse_args()
 
     dual(args)
