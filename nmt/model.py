@@ -344,7 +344,7 @@ class NMT(nn.Module):
         if not type(src_sents[0]) == list:
             src_sents = [src_sents]
 
-        src_sents_var = to_input_variable(src_sents, self.vocab.src, cuda=self.args.cuda, is_test=True)
+        src_sents_var = to_input_variable(src_sents, self.vocab.src, cuda=self.args.cuda, is_test=False)
 
         src_encoding, dec_init_vec = self.encode(src_sents_var, [len(src_sents[0])])
         src_encoding_att_linear = tensor_transform(self.att_src_linear, src_encoding)
@@ -353,8 +353,8 @@ class NMT(nn.Module):
         init_cell = dec_init_vec[1]
         hidden = (init_state, init_cell)
 
-        att_tm1 = Variable(torch.zeros(1, self.args.hidden_size), volatile=True)
-        hyp_scores = Variable(torch.zeros(1), volatile=True)
+        att_tm1 = Variable(torch.zeros(1, self.args.hidden_size), requires_grad=False)
+        hyp_scores = Variable(torch.zeros(1), requires_grad=False)
         if self.args.cuda:
             att_tm1 = att_tm1.cuda()
             hyp_scores = hyp_scores.cuda()
@@ -379,7 +379,7 @@ class NMT(nn.Module):
             expanded_src_encoding = src_encoding.expand(src_encoding.size(0), hyp_num, src_encoding.size(2))
             expanded_src_encoding_att_linear = src_encoding_att_linear.expand(src_encoding_att_linear.size(0), hyp_num, src_encoding_att_linear.size(2))
 
-            y_tm1 = Variable(torch.LongTensor([hyp[-1] for hyp in hypotheses]), volatile=True)
+            y_tm1 = Variable(torch.LongTensor([hyp[-1] for hyp in hypotheses]), requires_grad=False)
             if self.args.cuda:
                 y_tm1 = y_tm1.cuda()
 
@@ -406,10 +406,7 @@ class NMT(nn.Module):
             word_ids = top_new_hyp_pos % tgt_vocab_size
             # new_hyp_scores = new_hyp_scores[top_new_hyp_pos.data]
 
-            # debugging
-            # print('  [DEBUG] p_t.data =', p_t.data, file=sys.stderr)
             # get output distributions
-            dist_t = p_t.cpu().data
             p_t_cpu = p_t.cpu()
 
             new_out_dists = []
@@ -440,7 +437,7 @@ class NMT(nn.Module):
             hidden = (h_t[live_hyp_ids], cell_t[live_hyp_ids])
             att_tm1 = att_t[live_hyp_ids]
 
-            hyp_scores = Variable(torch.FloatTensor(new_hyp_scores), volatile=True) # new_hyp_scores[live_hyp_ids]
+            hyp_scores = Variable(torch.FloatTensor(new_hyp_scores), requires_grad=False) # new_hyp_scores[live_hyp_ids]
             if self.args.cuda:
                 hyp_scores = hyp_scores.cuda()
 

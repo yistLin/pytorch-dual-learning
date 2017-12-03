@@ -55,7 +55,8 @@ def beam(args):
     # build model
     model = NMT(opt, vocab)
     model.load_state_dict(state_dict)
-    model.eval()
+    model.train()
+    # model.eval()
     model = model.cuda()
 
     # loss function
@@ -78,6 +79,8 @@ def beam(args):
         var_ids = torch.autograd.Variable(torch.LongTensor(ids[1:]), requires_grad=False)
         loss = loss_fn(dist, var_ids)
         print('NLL loss =', loss)
+
+    loss.backward()
 
 
 if __name__ == '__main__':
