@@ -7,7 +7,7 @@ class Dictionary(object):
     def __init__(self):
         self.word2idx = {'<unk>': 0}
         self.idx2word = ['<unk>']
-        self.wordcnt = {}
+        self.wordcnt = {'<unk>': 1}
 
     def add_word(self, word):
         if word not in self.word2idx:
