@@ -13,6 +13,7 @@ from nmt import NMT, to_input_variable
 from lm import LMProb
 from lm import model
 
+
 def dual(args):
     vocabs = {}
     opts = {}
@@ -21,35 +22,38 @@ def dual(args):
     lms = {}
 
     # load model params & training data
-    print('load modelA from [{:s}]'.format(args.modelA_bin), file=sys.stderr)
-    params = torch.load(args.modelA_bin, map_location=lambda storage, loc: storage)
-    vocabs['A'] = params['vocab']
-    opts['A'] = params['args']
-    state_dicts['A'] = params['state_dict']
-    print('load train_srcA from [{:s}]'.format(args.train_srcA), file=sys.stderr)
-    train_srcs['A'] = read_corpus(args.train_srcA, source='src')
-    print('load lmA from [{:s}]'.format(args.lmA), file=sys.stderr)
-    lms['A'] = LMProb(args.lmA, args.lmAdict)
+    for i in range(2):
+        mid = (['A', 'B'])[i]
+        print('loading pieces, part {:s}'.format(mid))
 
-    print('load modelB from [{:s}]'.format(args.modelB_bin), file=sys.stderr)
-    params = torch.load(args.modelB_bin, map_location=lambda storage, loc: storage)
-    vocabs['B'] = params['vocab']
-    opts['B'] = params['args']
-    state_dicts['B'] = params['state_dict']    
-    print('load train_srcB from [{:s}]'.format(args.train_srcB), file=sys.stderr)
-    train_srcs['B'] = read_corpus(args.train_srcB, source='src')
-    print('load lmB from [{:s}]'.format(args.lmB), file=sys.stderr)
-    lms['B'] = LMProb(args.lmB, args.lmBdict)
+        print('  load model{:s}     from [{:s}]'.format(mid, args.nmt[i]), file=sys.stderr)
+        params = torch.load(args.nmt[i], map_location=lambda storage, loc: storage)
+        vocabs[mid] = params['vocab']
+        opts[mid] = params['args']
+        state_dicts[mid] = params['state_dict']
+
+        print('  load train_src{:s} from [{:s}]'.format(mid, args.src[i]), file=sys.stderr)
+        train_srcs[mid] = read_corpus(args.src[i], source='src')
+
+        print('  load lm{:s}        from [{:s}]'.format(mid, args.lm[i]), file=sys.stderr)
+        lms[mid] = LMProb(args.lm[i], args.dict[i])
 
     models = {}
     optimizers = {}
 
     for m in ['A', 'B']:
         # build model
+        if args.cuda:
+            opts[m].cuda = True
+        else:
+            opts[m].cuda = False
+
         models[m] = NMT(opts[m], vocabs[m])
         models[m].load_state_dict(state_dicts[m])
         models[m].train()
-        models[m] = models[m].cuda()
+
+        if args.cuda:
+            models[m] = models[m].cuda()
 
         random.shuffle(train_srcs[m])
 
@@ -63,7 +67,7 @@ def dual(args):
     epoch = 0
     while True:
         epoch += 1
-        print('start of epoch {:d}'.format(epoch))
+        print('\nstart of epoch {:d}'.format(epoch))
 
         data = {}
         data['A'] = iter(train_srcs['A'])
@@ -76,7 +80,7 @@ def dual(args):
                 show_log = True
             
             if show_log:
-                print('step', t)
+                print('\nstep', t)
 
             for m in ['A', 'B']:
                 lm_probs = []
@@ -93,6 +97,7 @@ def dual(args):
                 s = next(data[m])
 
                 if show_log:
+                    print('\n{:s} -> {:s}'.format(m, change(m)))
                     print('[s]', ' '.join(s))
 
                 hyps = modelA.beam(s, beam_size=5)
@@ -106,8 +111,8 @@ def dual(args):
 
                     lm_probs.append(lmB.get_prob(smid))
 
-                    src_sent_var = to_input_variable([smid], vocabB.src, cuda=True)
-                    tgt_sent_var = to_input_variable([['<s>'] + s + ['</s>']], vocabB.tgt, cuda=True)
+                    src_sent_var = to_input_variable([smid], vocabB.src, cuda=args.cuda)
+                    tgt_sent_var = to_input_variable([['<s>'] + s + ['</s>']], vocabB.tgt, cuda=args.cuda)
                     src_sent_len = [len(smid)]
 
                     score = modelB(src_sent_var, src_sent_len, tgt_sent_var[:-1]).squeeze(1)
@@ -142,11 +147,11 @@ def dual(args):
 
                 if show_log:
                     print('A loss = {:.7f} \t B loss = {:.7f}'.format(A_loss.data.numpy().item(), B_loss.data.numpy().item()))
-                    print()
             
             if t % args.save_n_iter == 0:
-                models['A'].save('{}.iter{}.bin'.format(args.modelA_path, t))
-                models['B'].save('{}.iter{}.bin'.format(args.modelB_path, t))
+                print('\nsaving model')
+                models['A'].save('{}.iter{}.bin'.format(args.model[0], t))
+                models['B'].save('{}.iter{}.bin'.format(args.model[1], t))
 
 
 def change(m):
@@ -155,21 +160,18 @@ def change(m):
     else:
         return 'A'
 
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('modelA_bin')
-    parser.add_argument('modelB_bin')
-    parser.add_argument('lmA')
-    parser.add_argument('lmAdict')
-    parser.add_argument('lmB')
-    parser.add_argument('lmBdict')
-    parser.add_argument('train_srcA')
-    parser.add_argument('train_srcB')
-    parser.add_argument('--modelA_path', type=str, default='modelA')
-    parser.add_argument('--modelB_path', type=str, default='modelB')
+    parser.add_argument('--nmt', nargs=2, required=True, help='pre-train nmt model path')
+    parser.add_argument('--lm', nargs=2, required=True, help='language model path')
+    parser.add_argument('--dict', nargs=2, required=True, help='dictionary path')
+    parser.add_argument('--src', nargs=2, required=True, help='training data path')
+    parser.add_argument('--model', nargs=2, type=str, default=['modelA', 'modelB'])
     parser.add_argument('--log_every', type=int, default=10)
     parser.add_argument('--save_n_iter', type=int, default=1000)
     parser.add_argument('--alpha', type=float, default=0.5)
+    parser.add_argument('--cuda', action='store_true')
     args = parser.parse_args()
 
     dual(args)
