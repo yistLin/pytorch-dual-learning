@@ -1,15 +1,15 @@
 #!/bin/sh
 
-data_dir="./wmt16-data"
-vocab_bin="$data_dir/vocab.bin"
-train_src="$data_dir/train.en"
-train_tgt="$data_dir/train.de"
-dev_src="$data_dir/valid.en"
-dev_tgt="$data_dir/valid.de"
-test_src="$data_dir/test.en"
-test_tgt="$data_dir/test.de"
+data_dir="/data/groups/chatbot/dl_data/wmt16"
+vocab_bin="$data_dir/vocab.deen.bin"
+train_src="$data_dir/train.de"
+train_tgt="$data_dir/train.en"
+dev_src="$data_dir/valid.de"
+dev_tgt="$data_dir/valid.en"
+test_src="$data_dir/test.de"
+test_tgt="$data_dir/test.en"
 
-job_name="wmt16-ende"
+job_name="wmt16-deen"
 model_name="model.${job_name}"
 
 python3 nmt.py \
@@ -18,9 +18,9 @@ python3 nmt.py \
     --vocab ${vocab_bin} \
     --save_to ${model_name} \
     --log_every 100 \
-    --valid_niter 2400 \
+    --valid_niter 5000 \
     --valid_metric ppl \
-    --save_model_after 2 \
+    --save_model_after 1 \
     --beam_size 5 \
     --batch_size 64 \
     --hidden_size 256 \
@@ -32,5 +32,6 @@ python3 nmt.py \
     --train_src ${train_src} \
     --train_tgt ${train_tgt} \
     --dev_src ${dev_src} \
-    --dev_tgt ${dev_tgt}
+    --dev_tgt ${dev_tgt} \
+    --load_model "$1"
 

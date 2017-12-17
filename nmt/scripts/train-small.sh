@@ -1,15 +1,19 @@
 #!/bin/sh
 
-data_dir="./wmt16-small-data"
-vocab_bin="$data_dir/vocab.bin"
-train_src="$data_dir/train.en"
-train_tgt="$data_dir/train.de"
-dev_src="$data_dir/valid.en"
-dev_tgt="$data_dir/valid.de"
-test_src="$data_dir/test.en"
-test_tgt="$data_dir/test.de"
+L1=$1
+L2=$2
+JOB=$3
 
-job_name="wmt16-ende-small"
+data_dir="./wmt16-small-data"
+vocab_bin="$data_dir/vocab.$L1$L2.bin"
+train_src="$data_dir/train.$L1"
+train_tgt="$data_dir/train.$L2"
+dev_src="$data_dir/valid.$L1"
+dev_tgt="$data_dir/valid.$L2"
+test_src="$data_dir/test.$L1"
+test_tgt="$data_dir/test.$L2"
+
+job_name="$JOB"
 model_name="model.${job_name}"
 
 python3 nmt.py \

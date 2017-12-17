@@ -78,7 +78,7 @@ def dual(args):
             show_log = False
             if t % args.log_every == 0:
                 show_log = True
-            
+
             if show_log:
                 print('\nstep', t)
 
@@ -106,7 +106,7 @@ def dual(args):
                     if show_log:
                         print('[smid]', ' '.join(smid))
 
-                    var_ids = torch.autograd.Variable(torch.LongTensor(ids[1:]), requires_grad=False)
+                    var_ids = Variable(torch.LongTensor(ids[1:]), requires_grad=False)
                     NLL_losses.append(loss_nll(dist, var_ids).cpu())
 
                     lm_probs.append(lmB.get_prob(smid))
@@ -119,9 +119,11 @@ def dual(args):
 
                     CE_losses.append(loss_ce(score, tgt_sent_var[1:].view(-1)).cpu())
 
+                # r1, language model reward
                 r1_mean = sum(lm_probs) / len(lm_probs)
                 r1 = [Variable(torch.FloatTensor([p - r1_mean]), requires_grad=False) for p in lm_probs]
 
+                # r2, communication reward
                 r2_mean = sum(CE_losses) / len(CE_losses)
                 r2 = [Variable(-(l.data - r2_mean.data), requires_grad=False) for l in CE_losses]
 
@@ -138,7 +140,7 @@ def dual(args):
 
                 A_loss = torch.mean(torch.cat(NLL_losses) * torch.cat(rk))
                 B_loss = torch.mean(torch.cat(CE_losses)) * beta
-                
+
                 A_loss.backward()
                 B_loss.backward()
 
@@ -147,7 +149,7 @@ def dual(args):
 
                 if show_log:
                     print('A loss = {:.7f} \t B loss = {:.7f}'.format(A_loss.data.numpy().item(), B_loss.data.numpy().item()))
-            
+
             if t % args.save_n_iter == 0:
                 print('\nsaving model')
                 models['A'].save('{}.iter{}.bin'.format(args.model[0], t))
