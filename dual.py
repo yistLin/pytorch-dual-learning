@@ -23,30 +23,27 @@ def dual(args):
 
     # load model params & training data
     for i in range(2):
-        mid = (['A', 'B'])[i]
-        print('loading pieces, part {:s}'.format(mid))
+        model_id = (['A', 'B'])[i]
+        print('loading pieces, part {:s}'.format(model_id))
 
-        print('  load model{:s}     from [{:s}]'.format(mid, args.nmt[i]), file=sys.stderr)
-        params = torch.load(args.nmt[i], map_location=lambda storage, loc: storage)
-        vocabs[mid] = params['vocab']
-        opts[mid] = params['args']
-        state_dicts[mid] = params['state_dict']
+        print('  load model{:s}     from [{:s}]'.format(model_id, args.nmt[i]), file=sys.stderr)
+        params = torch.load(args.nmt[i], map_location=lambda storage, loc: storage)  # load model onto CPU
+        vocabs[model_id] = params['vocab']
+        opts[model_id] = params['args']
+        state_dicts[model_id] = params['state_dict']
 
-        print('  load train_src{:s} from [{:s}]'.format(mid, args.src[i]), file=sys.stderr)
-        train_srcs[mid] = read_corpus(args.src[i], source='src')
+        print('  load train_src{:s} from [{:s}]'.format(model_id, args.src[i]), file=sys.stderr)
+        train_srcs[model_id] = read_corpus(args.src[i], source='src')
 
-        print('  load lm{:s}        from [{:s}]'.format(mid, args.lm[i]), file=sys.stderr)
-        lms[mid] = LMProb(args.lm[i], args.dict[i])
+        print('  load lm{:s}        from [{:s}]'.format(model_id, args.lm[i]), file=sys.stderr)
+        lms[model_id] = LMProb(args.lm[i], args.dict[i])
 
     models = {}
     optimizers = {}
 
     for m in ['A', 'B']:
         # build model
-        if args.cuda:
-            opts[m].cuda = True
-        else:
-            opts[m].cuda = False
+        opts[m].cuda = args.cuda
 
         models[m] = NMT(opts[m], vocabs[m])
         models[m].load_state_dict(state_dicts[m])
@@ -119,36 +116,40 @@ def dual(args):
 
                     CE_losses.append(loss_ce(score, tgt_sent_var[1:].view(-1)).cpu())
 
+                # losses on target language
+                fw_losses = torch.cat(NLL_losses)
+
+                # losses on reconstruction
+                bw_losses = torch.cat(CE_losses)
+
                 # r1, language model reward
-                r1_mean = sum(lm_probs) / len(lm_probs)
-                r1 = [Variable(torch.FloatTensor([p - r1_mean]), requires_grad=False) for p in lm_probs]
+                r1s = Variable(torch.FloatTensor(lm_probs), requires_grad=False)
+                r1s = (r1s - torch.mean(r1s)) / torch.std(r1s)
 
                 # r2, communication reward
-                r2_mean = sum(CE_losses) / len(CE_losses)
-                r2 = [Variable(-(l.data - r2_mean.data), requires_grad=False) for l in CE_losses]
+                r2s = Variable(bw_losses.data, requires_grad=False)
+                r2s = (r2s - torch.mean(r2s)) / torch.std(r2s)
+
+                # rk = alpha * r1 + (1 - alpha) * r2
+                rks = r1s * args.alpha + r2s * (1 - args.alpha)
+
+                # averaging loss over samples
+                A_loss = torch.mean(fw_losses * rks)
+                B_loss = torch.mean(bw_losses * (1 - args.alpha))
 
                 if show_log:
-                    for a, b, in zip(r1, r2):
-                        print('r1 = {:.4f} \t r2 = {:.4f}'.format(a.data.numpy().item(), b.data.numpy().item()))
-
-                alpha = Variable(torch.FloatTensor([args.alpha]), requires_grad=False)
-                beta = Variable(torch.FloatTensor([1 - args.alpha]), requires_grad=False)
-                rk = [a * alpha + b * beta for a, b in zip(r1, r2)]
+                    for r1, r2, rk, fw_loss, bw_loss in zip(r1s.data.numpy(), r2s.data.numpy(), rks.data.numpy(), fw_losses.data.numpy(), bw_losses.data.numpy()):
+                        print('r1={:7.4f}\t r2={:7.4f}\t rk={:7.4f}\t fw_loss={:7.4f}\t bw_loss={:7.4f}'.format(r1, r2, rk, fw_loss, bw_loss))
+                    print('A loss = {:.7f} \t B loss = {:.7f}'.format(A_loss.data.numpy().item(), B_loss.data.numpy().item()))
 
                 optimizerA.zero_grad()
                 optimizerB.zero_grad()
-
-                A_loss = torch.mean(torch.cat(NLL_losses) * torch.cat(rk))
-                B_loss = torch.mean(torch.cat(CE_losses)) * beta
 
                 A_loss.backward()
                 B_loss.backward()
 
                 optimizerA.step()
                 optimizerB.step()
-
-                if show_log:
-                    print('A loss = {:.7f} \t B loss = {:.7f}'.format(A_loss.data.numpy().item(), B_loss.data.numpy().item()))
 
             if t % args.save_n_iter == 0:
                 print('\nsaving model')
