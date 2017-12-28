@@ -55,7 +55,8 @@ def dual(args):
         random.shuffle(train_srcs[m])
 
         # optimizer
-        optimizers[m] = torch.optim.Adam(models[m].parameters())
+        # optimizers[m] = torch.optim.Adam(models[m].parameters())
+        optimizers[m] = torch.optim.SGD(models[m].parameters(), lr=1e-3, momentum=0.9)
 
     # loss function
     loss_nll = torch.nn.NLLLoss()
@@ -128,7 +129,7 @@ def dual(args):
 
                 # r2, communication reward
                 r2s = Variable(bw_losses.data, requires_grad=False)
-                r2s = (r2s - torch.mean(r2s)) / torch.std(r2s)
+                r2s = (torch.mean(r2s) - r2s) / torch.std(r2s)
 
                 # rk = alpha * r1 + (1 - alpha) * r2
                 rks = r1s * args.alpha + r2s * (1 - args.alpha)
@@ -176,6 +177,8 @@ if __name__ == '__main__':
     parser.add_argument('--alpha', type=float, default=0.5)
     parser.add_argument('--cuda', action='store_true')
     args = parser.parse_args()
+
+    print(args)
 
     dual(args)
 
