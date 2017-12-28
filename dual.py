@@ -4,6 +4,7 @@ import sys
 import torch
 import argparse
 import random
+import nltk
 
 from torch.autograd import Variable
 
@@ -83,8 +84,9 @@ def dual(args):
             for m in ['A', 'B']:
                 lm_probs = []
 
-                NLL_losses = []
+                A_NLL_losses = []
                 CE_losses = []
+                B_NLL_losses = []
 
                 modelA = models[m]
                 modelB = models[change(m)]
@@ -105,7 +107,7 @@ def dual(args):
                         print('[smid]', ' '.join(smid))
 
                     var_ids = Variable(torch.LongTensor(ids[1:]), requires_grad=False)
-                    NLL_losses.append(loss_nll(dist, var_ids).cpu())
+                    A_NLL_losses.append(loss_nll(dist, var_ids).cpu())
 
                     lm_probs.append(lmB.get_prob(smid))
 
@@ -117,11 +119,27 @@ def dual(args):
 
                     CE_losses.append(loss_ce(score, tgt_sent_var[1:].view(-1)).cpu())
 
+                    # backward bleu score reward
+
+                    b_ids, s_final, b_dist = modelB.beam(smid[1:-1], beam_size=1)[0]
+
+                    reference = s
+                    hypothesis = s_final[1:-1]
+                    BLEUscore = nltk.translate.bleu_score.sentence_bleu([reference], hypothesis)
+
+                    b_var_ids = Variable(torch.LongTensor(b_ids[1:]), requires_grad=False)
+                    B_NLL_losses.append(loss_nll(b_dist, b_var_ids).cpu() * BLEUscore)
+                    if show_log:
+                        print('[sfinal]', ' '.join(s_final))
+                        print('[BLEUscore]', BLEUscore)
+
                 # losses on target language
-                fw_losses = torch.cat(NLL_losses)
+                fw_losses = torch.cat(A_NLL_losses)
 
                 # losses on reconstruction
                 bw_losses = torch.cat(CE_losses)
+
+                bw2_losses = torch.cat(B_NLL_losses)
 
                 # r1, language model reward
                 r1s = Variable(torch.FloatTensor(lm_probs), requires_grad=False)
@@ -136,7 +154,7 @@ def dual(args):
 
                 # averaging loss over samples
                 A_loss = torch.mean(fw_losses * rks)
-                B_loss = torch.mean(bw_losses * (1 - args.alpha))
+                B_loss = torch.mean(bw2_losses)
 
                 if show_log:
                     for r1, r2, rk, fw_loss, bw_loss in zip(r1s.data.numpy(), r2s.data.numpy(), rks.data.numpy(), fw_losses.data.numpy(), bw_losses.data.numpy()):
