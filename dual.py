@@ -121,6 +121,9 @@ def dual(args):
 
                     # backward bleu score reward
 
+                    if len(smid) <= 2:
+                        continue
+
                     b_ids, s_final, b_dist = modelB.beam(smid[1:-1], beam_size=1)[0]
 
                     reference = s
