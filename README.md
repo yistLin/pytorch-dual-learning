@@ -24,31 +24,31 @@ Firstly, we trained our basic model with 450K bilingual pair, which is only 10% 
 
 - English-Deutsch
     - after 300 iterations
-    ```
-    BLEU = 21.27, 49.5/27.2/17.9/12.4
-    ```
+        ```
+        BLEU = 21.27, 49.5/27.2/17.9/12.4
+        ```
     - after 600 iterations
-    ```
-    BLEU = 21.39, 49.1/26.8/17.6/12.2
-    ```
+        ```
+        BLEU = 21.39, 49.1/26.8/17.6/12.2
+        ```
     - after 900 iterations
-    ```
-    BLEU = 21.49, 49.0/26.8/17.6/12.2
-    ```
+        ```
+        BLEU = 21.49, 49.0/26.8/17.6/12.2
+        ```
 
 - Deutsch-English
     - after 300 iterations
-    ```
-    BLEU = 25.90, 56.3/33.0/22.4/15.9
-    ```
+        ```
+        BLEU = 25.90, 56.3/33.0/22.4/15.9
+        ```
     - after 600 iterations
-    ```
-    BLEU = 25.89, 56.0/32.8/22.3/15.8
-    ```
+        ```
+        BLEU = 25.89, 56.0/32.8/22.3/15.8
+        ```
     - after 900 iterations
-    ```
-    BLEU = 25.91, 56.1/32.9/22.3/15.8
-    ```
+        ```
+        BLEU = 25.91, 56.1/32.9/22.3/15.8
+        ```
 
 ##### Comparisons
 
