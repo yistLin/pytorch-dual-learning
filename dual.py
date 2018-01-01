@@ -63,6 +63,8 @@ def dual(args):
     loss_ce = torch.nn.CrossEntropyLoss()
 
     epoch = 0
+    start = args.start_iter
+
     while True:
         epoch += 1
         print('\nstart of epoch {:d}'.format(epoch))
@@ -71,7 +73,8 @@ def dual(args):
         data['A'] = iter(train_srcs['A'])
         data['B'] = iter(train_srcs['B'])
 
-        start = (epoch - 1) * len(train_srcs['A']) + 1
+        start += (epoch - 1) * len(train_srcs['A']) + 1
+
         for t in range(start, start + len(train_srcs['A'])):
             show_log = False
             if t % args.log_every == 0:
@@ -175,6 +178,7 @@ if __name__ == '__main__':
     parser.add_argument('--log_every', type=int, default=10)
     parser.add_argument('--save_n_iter', type=int, default=1000)
     parser.add_argument('--alpha', type=float, default=0.5)
+    parser.add_argument('--start_iter', type=int, default=0)
     parser.add_argument('--cuda', action='store_true')
     args = parser.parse_args()
 

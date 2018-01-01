@@ -43,7 +43,7 @@ class LMProb():
                 print('  {} => {:d},\tlogP(w|s)={:.4f}'.format(pad_words[i+1], indxs[i+1], log_probs[i]))
             print('\n  => sum_prob = {:.4f}'.format(sum(log_probs)))
 
-        return sum(log_probs) / len(log_probs)
+        return sum(log_probs) / math.sqrt(len(log_probs))
 
 
 if __name__ == '__main__':
