@@ -4,6 +4,31 @@ This is the PyTorch implementation for [Dual Learning for Machine Translation](h
 
 The NMT models used as channels are heavily depend on [pcyin/pytorch\_nmt](https://github.com/pcyin/pytorch_nmt).
 
+### Usage
+
+You shall prepare these models for dual learning step:
+- Language Models x 2
+- Translation Models x 2
+
+##### Warm-up Step
+
+- Language Models \
+    Check here [lm/](https://github.com/yistLin/pytorch-dual-learning/tree/master/lm)
+- Translation Models \
+    Check here [nmt/](https://github.com/yistLin/pytorch-dual-learning/tree/master/nmt)
+
+##### Dual Learning Step
+
+During the reinforcement learning process, it will take language models and translation models as rewards, and update the translation models. \
+You can find more details in the paper.
+
+- Training \
+    You can simply use this [script](https://github.com/yistLin/pytorch-dual-learning/blob/master/train-dual.sh),
+ you have to modify the path and name to your models.
+- Test \
+    To use the trained models, you can just treat it as [NMT models](https://github.com/pcyin/pytorch_nmt).
+
+
 ### Test (Basic)
 
 Firstly, we trained our basic model with 450K bilingual pair, which is only 10% data, as warm-start. Then, we set up a dual-learning game, and trained two models using reinforcement technique.
@@ -52,4 +77,3 @@ Firstly, we trained our basic model with 450K bilingual pair, which is only 10% 
 | EN-DE (bleu) |          | 21.42   | 21.57   | 21.55   | 21.55    |          |          |          |          |
 | DE-EN        | 24.69    | 25.90   | 25.89   | 25.91   | 26.03    | 25.94    | 26.02    | 26.18    | 26.20    |
 | DE-EN (bleu) |          | 25.96   | 26.25   | 26.22   | 26.18    |          |          |          |          |
-
