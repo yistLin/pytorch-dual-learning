@@ -1,8 +1,12 @@
 # Neural Machine Translation
 
-### Reference
+This NMT model is heavily depended on [pcyin/pytorch\_nmt](https://github.com/pcyin/pytorch_nmt). To train model, just follow the steps provided there.
 
-This NMT model is heavily depend on [pcyin/pytorch\_nmt](https://github.com/pcyin/pytorch_nmt).
+Basiscally, you need to:
+1. use `vocab.py` to generate vocab file
+2. use `nmt.py` to train model
+
+And you may find `scripts/train.sh` helpful.
 
 ### Test Results
 
