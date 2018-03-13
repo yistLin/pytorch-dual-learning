@@ -19,7 +19,7 @@ You shall prepare these models for dual learning step:
 
 ##### Dual Learning Step
 
-During the reinforcement learning process, it will take language models and translation models as rewards, and update the translation models. \
+During the reinforcement learning process, it will gain rewards from language models and translation models, and update the translation models. \
 You can find more details in the paper.
 
 - Training \
